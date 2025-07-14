@@ -1,14 +1,62 @@
 ---
-- hosts: ubuntu-22
+- hosts: all
   become: yes
   vars:
     enable_fips: "{{ enable_fips | default(false) }}"
   tasks:
+    - name: Update package cache
+      package_facts:
+        manager: auto
+      tags: [packages]
+
+    - name: Install common packages
+      package:
+        name:
+          - curl
+          - wget
+          - unzip
+          - git
+          - vim
+          - htop
+          - net-tools
+        state: present
+      tags: [packages]
+
+    - name: Configure FIPS mode (when enabled)
+      block:
+        - name: Enable FIPS mode on RHEL/CentOS/Rocky
+          lineinfile:
+            path: /etc/default/grub
+            regexp: '^GRUB_CMDLINE_LINUX='
+            line: 'GRUB_CMDLINE_LINUX="fips=1"'
+            state: present
+          when: ansible_os_family == "RedHat"
+          notify: update grub
+
+        - name: Enable FIPS mode on Ubuntu
+          lineinfile:
+            path: /etc/default/grub
+            regexp: '^GRUB_CMDLINE_LINUX='
+            line: 'GRUB_CMDLINE_LINUX="fips=1"'
+            state: present
+          when: ansible_os_family == "Debian"
+          notify: update grub
+
+        - name: Print FIPS configuration status
+          debug:
+            msg: "FIPS mode will be enabled on next reboot"
+      when: enable_fips | bool
+      tags: [fips]
+
     - name: Print FIPS status
       debug:
-        msg: "FIPS is enabled!"
-      when: enable_fips | bool
-    - name: Print FIPS not enabled
-      debug:
-        msg: "FIPS is not enabled."
-      when: not (enable_fips | bool)
+        msg: "FIPS is {{ 'enabled' if enable_fips else 'disabled' }}"
+
+  handlers:
+    - name: update grub
+      command: grub2-mkconfig -o /boot/grub2/grub.cfg
+      when: ansible_os_family == "RedHat"
+
+    - name: update grub ubuntu
+      command: update-grub
+      when: ansible_os_family == "Debian"

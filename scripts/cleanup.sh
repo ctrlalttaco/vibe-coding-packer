@@ -1,5 +1,5 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -o verbose
 
 echo "Running cleanup steps..."
 
@@ -20,12 +20,6 @@ case "$DISTRO" in
     yum clean all || true
     rm -rf /var/cache/yum
     ;;
-  ubuntu)
-    echo "Running Ubuntu-specific cleanup..."
-    # Clean apt cache
-    apt-get clean
-    rm -rf /var/lib/apt/lists/*
-    ;;
   rhel)
     echo "Running RHEL-specific cleanup..."
     # Clean yum/dnf cache
@@ -44,6 +38,12 @@ case "$DISTRO" in
       yum clean all
     fi
     rm -rf /var/cache/yum
+    ;;
+  ubuntu)
+    echo "Running Ubuntu-specific cleanup..."
+    # Clean apt cache
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
     ;;
   *)
     echo "Unknown distro: $DISTRO. No specific cleanup run."

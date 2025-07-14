@@ -1,5 +1,5 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -o verbose
 
 echo "Running pre-requisite steps..."
 
@@ -17,21 +17,50 @@ echo "Detected distro: $DISTRO"
 case "$DISTRO" in
   amzn)
     echo "Running Amazon Linux-specific pre-reqs..."
-    # Add Amazon Linux-specific commands here
+    # Update system
+    yum update -y
+    # Install EPEL
+    yum install -y epel-release
+    # Install additional repositories
+    yum install -y yum-utils
     ;;
   rhel)
     echo "Running RHEL-specific pre-reqs..."
-    # Add RHEL-specific commands here
+    # Update system
+    yum update -y
+    # Install EPEL
+    yum install -y epel-release
+    # Enable additional repositories
+    subscription-manager repos --enable rhel-*-optional-rpms --enable rhel-*-extras-rpms
     ;;
   rocky)
     echo "Running Rocky Linux-specific pre-reqs..."
-    # Add Rocky Linux-specific commands here
+    # Update system
+    dnf update -y
+    # Install EPEL
+    dnf install -y epel-release
+    # Enable PowerTools repository
+    dnf config-manager --set-enabled powertools
     ;;
   ubuntu)
     echo "Running Ubuntu-specific pre-reqs..."
-    # Add Ubuntu-specific commands here
+    # Update system
+    apt-get update
+    apt-get upgrade -y
+    # Install additional repositories
+    apt-get install -y software-properties-common
     ;;
   *)
-    echo "Unknown distro: $DISTRO. No specific pre-reqs run."
+    echo "Unknown distro: $DISTRO. Running generic pre-reqs..."
+    # Generic package manager update
+    if command -v yum >/dev/null 2>&1; then
+      yum update -y
+    elif command -v dnf >/dev/null 2>&1; then
+      dnf update -y
+    elif command -v apt-get >/dev/null 2>&1; then
+      apt-get update && apt-get upgrade -y
+    fi
     ;;
 esac
+
+echo "Pre-requisite steps completed successfully."
