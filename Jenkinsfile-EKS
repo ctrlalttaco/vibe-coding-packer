@@ -1,0 +1,70 @@
+pipeline {
+    agent any
+    parameters {
+        choice(name: 'DISTRO', choices: ['amazon-linux-2-eks', 'amazon-linux-2023-eks'], description: 'EKS Linux distribution to build (leave as is for all)')
+        choice(name: 'ARCH', choices: ['x86_64', 'arm64'], description: 'CPU architecture to build (leave as is for all)')
+        choice(name: 'K8S_VERSION', choices: ['1.29', '1.30', '1.31', '1.32', '1.33'], description: 'Kubernetes version to build (leave as is for all)')
+    }
+    triggers {
+        cron('0 1 * * 1')
+    }
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        parallelsAlwaysFailFast()
+        disableConcurrentBuilds()
+    }
+    environment {
+        AWS_ACCESS_KEY_ID     = credentials('aws-access-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+        AWS_DEFAULT_REGION    = 'us-east-1'
+    }
+    stages {
+        stage('Init') {
+            steps {
+                sh 'packer init .'
+            }
+        }
+        stage('Validate') {
+            steps {
+                sh 'packer validate build.pkr.hcl'
+            }
+        }
+        stage('Matrix Build EKS AMIs') {
+            matrix {
+                axes {
+                    axis {
+                        name: 'DISTRO'
+                        values: params.DISTRO == '' ? ['amazon-linux-2-eks', 'amazon-linux-2023-eks'] : [params.DISTRO]
+                    }
+                    axis {
+                        name: 'ARCH'
+                        values: params.ARCH == '' ? ['x86_64', 'arm64'] : [params.ARCH]
+                    }
+                    axis {
+                        name: 'K8S_VERSION'
+                        values: params.K8S_VERSION == '' ? ['1.29', '1.30', '1.31', '1.32', '1.33'] : [params.K8S_VERSION]
+                    }
+                }
+                excludes {
+                    exclude {
+                        DISTRO: 'amazon-linux-2-eks'; K8S_VERSION: '1.33'
+                    }
+                }
+                stages {
+                    stage('Build') {
+                        agent any
+                        options { lock(resource: 'packer-ami', quantity: 2) }
+                        steps {
+                            sh "packer build -var 'distro=${DISTRO}' -var 'arch=${ARCH}' -var 'k8s_version=${K8S_VERSION}' build.pkr.hcl"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs()
+        }
+    }
+} 

@@ -1,0 +1,14 @@
+---
+- hosts: ubuntu-22
+  become: yes
+  vars:
+    enable_fips: "{{ enable_fips | default(false) }}"
+  tasks:
+    - name: Print FIPS status
+      debug:
+        msg: "FIPS is enabled!"
+      when: enable_fips | bool
+    - name: Print FIPS not enabled
+      debug:
+        msg: "FIPS is not enabled."
+      when: not (enable_fips | bool)
