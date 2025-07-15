@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # Amazon Workspaces required packages for RHEL 8 and 9

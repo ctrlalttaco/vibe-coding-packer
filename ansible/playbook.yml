@@ -1,0 +1,11 @@
+---
+- name: Configure host
+  hosts: all
+  become: true
+  vars:
+    enable_fips: "{{ enable_fips | default(false) }}"
+  tasks:
+    - name: Update package cache
+      ansible.builtin.package_facts:
+        manager: auto
+      tags: [packages]

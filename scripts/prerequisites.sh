@@ -53,11 +53,11 @@ case "$DISTRO" in
   *)
     echo "Unknown distro: $DISTRO. Running generic pre-reqs..."
     # Generic package manager update
-    if command -v yum >/dev/null 2>&1; then
+    if command -v yum &> /dev/null; then
       yum update -y
-    elif command -v dnf >/dev/null 2>&1; then
+    elif command -v dnf &> /dev/null; then
       dnf update -y
-    elif command -v apt-get >/dev/null 2>&1; then
+    elif command -v apt-get &> /dev/null; then
       apt-get update && apt-get upgrade -y
     fi
     ;;

@@ -50,12 +50,22 @@ packer validate build.pkr.hcl
 packer build -var 'distro=ubuntu-22' -var 'arch=x86_64' build.pkr.hcl
 ```
 - Use `-var 'distro=...'` and `-var 'arch=...'` to select a specific build.
-- For EKS builds, add `-var 'k8s_version=1.31'`.
+- For EKS builds, add `-var 'k8s_version=1.31'` (supports 1.27-1.34).
+- Optional: `-var 'instance_type_override=...'` to use a custom instance type for faster builds.
+- Optional: `-var 'enforce_imdsv2=true|false'` to control IMDSv2 enforcement (default: true).
+- Optional: `-var 'enable_fips=true'` to enable FIPS mode for security compliance.
 
 ### 3. Jenkins CI/CD Pipelines
-- **Jenkinsfile**: Builds all standard distros/architectures (matrix), scheduled every Monday at 1:00 AM UTC.
-- **Jenkinsfile-EKS**: Builds all EKS distros/architectures/Kubernetes versions (matrix), scheduled every Monday at 1:00 AM UTC.
+- **Jenkinsfile**: Builds all distros/architectures (matrix), scheduled every Monday at 1:00 AM UTC.
 - Both pipelines allow manual selection of distros, architectures, and (for EKS) Kubernetes versions via Jenkins UI parameters.
+- **Pipeline Parameters:**
+  - `DISTRO`: Linux distribution to build
+  - `ARCH`: CPU architecture
+  - `K8S_VERSION`: Kubernetes version (EKS only)
+  - `ENABLE_FIPS`: Enable FIPS mode for security compliance
+  - `ENFORCE_IMDSV2`: Enforce IMDSv2 for enhanced security
+  - `INSTANCE_TYPE_OVERRIDE`: Override instance type for performance
+  - `PARALLEL_BUILDS`: Enable parallel builds for faster execution
 - Build history is limited to the 10 most recent builds.
 
 ### 4. Manifest Output
@@ -65,8 +75,17 @@ After each build, a `manifest.json` file is generated with metadata including di
 Use the provided Python script to create Jenkins jobs:
 ```sh
 pip install python-jenkins
-python add_jenkins_pipelines.py --jenkins-url <URL> --username <USER> --api-token <TOKEN>
+python add_jenkins_pipelines.py --jenkins-url <URL> --username <USER> --api-token <TOKEN> [--repo-url <REPO_URL>]
 ```
+- The script supports CLI options and environment variables for Jenkins URL, username, API token, and repository URL.
+
+### 6. Enhanced Security & Speed Features
+- **IMDSv2 enforcement**: Enabled by default for all builds for improved instance metadata security.
+- **FIPS mode**: Optional, for compliance builds.
+- **Instance type override**: Use larger/faster instances for speed.
+- **Enhanced cleanup**: `scripts/cleanup.sh` performs deep log, cache, and temp file cleanup for security.
+- **Pre-requisite script**: `scripts/prerequisites.sh` handles distro-specific setup.
+- **Workspace RHEL setup**: `scripts/workspace-rhel-setup.sh` installs Amazon Workspaces requirements for RHEL 8/9.
 
 ---
 

@@ -1,0 +1,6 @@
+.ansible/
+.python-venv/
+.vscode/
+
+manifest.json
+packer.log

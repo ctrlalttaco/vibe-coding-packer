@@ -16,6 +16,11 @@ variable "aws_region" {
   default = "us-east-1"
 }
 
+variable "aws_regions" {
+  type    = list(string)
+  default = ["us-east-1", "us-west-2"]
+}
+
 variable "prefix" {
   type    = string
   default = "test"
@@ -41,7 +46,21 @@ variable "arch" {
 variable "k8s_version" {
   type        = string
   default     = ""
-  description = "Kubernetes version for EKS builds (e.g., 1.29, 1.30, ...). Ignored for non-EKS builds."
+  description = "Kubernetes version for EKS builds"
+}
+
+# Speed optimization: Allow instance type override for faster builds
+variable "instance_type_override" {
+  type        = string
+  default     = ""
+  description = "Override instance type for performance optimization"
+}
+
+# Security optimization: Enable IMDSv2 enforcement
+variable "enforce_imdsv2" {
+  type        = bool
+  default     = true
+  description = "Enforce IMDSv2 for enhanced security"
 }
 
 locals {
@@ -65,7 +84,19 @@ locals {
       ssh_username        = "ec2-user"
     },
     {
+      name                = "rhel-8-ws"
+      source_ami_name     = "RHEL-8*_HVM-*"
+      source_ami_owners   = ["amazon"]
+      ssh_username        = "ec2-user"
+    },
+    {
       name                = "rhel-9"
+      source_ami_name     = "RHEL-9*_HVM-*"
+      source_ami_owners   = ["amazon"]
+      ssh_username        = "ec2-user"
+    },
+    {
+      name                = "rhel-9-ws"
       source_ami_name     = "RHEL-9*_HVM-*"
       source_ami_owners   = ["amazon"]
       ssh_username        = "ec2-user"
@@ -89,7 +120,19 @@ locals {
       ssh_username        = "ec2-user"
     },
     {
+      name                = "rocky-8-ws"
+      source_ami_name     = "Rocky-8-EC2-*-*"
+      source_ami_owners   = ["amazon"]
+      ssh_username        = "ec2-user"
+    },
+    {
       name                = "rocky-9"
+      source_ami_name     = "Rocky-9-EC2-*-*"
+      source_ami_owners   = ["amazon"]
+      ssh_username        = "ec2-user"
+    },
+    {
+      name                = "rocky-9-ws"
       source_ami_name     = "Rocky-9-EC2-*-*"
       source_ami_owners   = ["amazon"]
       ssh_username        = "ec2-user"
@@ -112,7 +155,7 @@ locals {
 
   # Filter by distro if specified
   filtered_distros = [for d in local.source_distros : d if var.distro == "" || d.name == var.distro]
-  filtered_eks     = [for d in local.filtered_distros : d if !lookup(d, "eks", false) && var.k8s_version != ""]
+  filtered_eks     = [for d in local.filtered_distros : d if lookup(d, "eks", false) && var.k8s_version != ""]
   distros          = [for d in local.filtered_eks : {
     name              = d.name
     source_ami_name   = d.source_ami_name
@@ -122,11 +165,43 @@ locals {
     eks               = lookup(d, "eks", false)
     k8s_version       = var.k8s_version
   }]
+
+  # Speed optimization: Use larger, faster instances
+  optimized_instance_type = var.instance_type_override != "" ? var.instance_type_override : (
+    var.arch == "arm64" ? "c6g.xlarge" : "c5.xlarge"
+  )
 }
 
 source "amazon-ebs" "linux" {
   region        = var.aws_region
-  instance_type = var.arch == "arm64" ? "t4g.large" : "t3.large"
+  instance_type = local.optimized_instance_type
+  spot_price    = "auto"
+  spot_price_auto_product = "Linux/UNIX"
+  ssh_handshake_attempts = 100
+  ssh_timeout = "10m"
+  ebs_optimized = true
+  volume_type = "gp3"
+  volume_size = 30
+  iops = 3000
+  throughput = 125
+  shutdown_behavior = "terminate"
+  
+  tags = {
+    Name        = "${var.prefix}-${source.name}-${source.arch}"
+    Environment = "production" # TODO: Make this a variable
+    Project     = "ami-builder" # TODO: Make this a variable
+    Distro      = source.name
+    Architecture = source.arch
+    BuildDate   = formatdate("YYYY-MM-DD", timestamp())
+    PackerBuild = "true"
+  }
+
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens = var.enforce_imdsv2 ? "required" : "optional"
+    http_put_response_hop_limit = 1
+    instance_metadata_tags = "enabled"
+  }
 }
 
 build {
@@ -140,14 +215,15 @@ build {
       ami_name      = source.value.eks ? "${var.prefix}-${source.value.name}-${source.value.arch}-${source.value.k8s_version}-{{timestamp}}" : "${var.prefix}-${source.value.name}-${source.value.arch}-{{timestamp}}"
     
       source_ami_filter {
+        owners      = source.value.source_ami_owners
+        most_recent = true
         filters = {
           name                = source.value.source_ami_name
           root-device-type    = "ebs"
           virtualization-type = "hvm"
           architecture        = source.value.arch
+          creation-date       = "*"
         }
-        owners      = source.value.source_ami_owners
-        most_recent = true
       }
     }
   }
@@ -159,9 +235,27 @@ build {
   provisioner "ansible" {
     playbook_file = "playbooks/playbook.yml"
     extra_arguments = [
-      "-e", "enable_fips=${var.enable_fips}"
+      "-e", "enable_fips=${var.enable_fips}",
+      # Speed optimization: Use more forks for parallel execution
+      "--forks=4",
+      # Speed optimization: Use pipelining
+      "--pipelining",
+      # Speed optimization: Reduce gathering
+      "--gathering=smart"
     ]
     groups = [source.name]
+    # Speed optimization: Use SSH pipelining
+    use_proxy = false
+    ansible_env_vars = [
+      "ANSIBLE_HOST_KEY_CHECKING=False",
+      "ANSIBLE_SSH_PIPELINING=True",
+      "ANSIBLE_STDOUT_CALLBACK=yaml"
+    ]
+  }
+
+  provisioner "shell" {
+    only   = ["rhel-8-ws", "rhel-9-ws", "rocky-8-ws", "rocky-9-ws"]
+    script = "scripts/workspace-rhel-setup.sh"
   }
 
   provisioner "shell" {
@@ -174,7 +268,13 @@ build {
     custom_data = {
       version_fingerprint = "${packer.versionFingerprint}"
       iteration = "${packer.iterationID}"
-      ami_name = "{source.ami_name}"
+      ami_name = "${source.ami_name}"
+      build_timestamp = "${formatdate("YYYY-MM-DD HH:mm:ss", timestamp())}"
+      build_duration = "${formatdate("s", timestamp())}"
+      distro = "${source.name}"
+      architecture = "${source.arch}"
+      fips_enabled = "${var.enable_fips}"
+      imdsv2_enforced = "${var.enforce_imdsv2}"
     }
   }
 }
