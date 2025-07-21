@@ -132,7 +132,9 @@ pipeline {
                             }
                         }
                     }
-                    parallel buildMatrix
+                    throttle(['throttle1']) {
+                        parallel buildMatrix
+                    }
                 }
             }
         }
