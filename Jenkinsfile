@@ -77,73 +77,63 @@ pipeline {
                 }
             }
         }
-        stage('AMI Builds') {
-            when {
-                expression { return params.DISTRO == 'all' || !params.DISTRO.contains("-eks")?.trim() }
-            }
+        // Dynamic parallel builds for each distro, architecture, and k8s version
+        stage('Parallel AMI Builds') {
             steps {
                 script {
-                    def filtered_distros = params.DISTRO == 'all' ? distros.findAll { !it.contains("-eks") } : [params.DISTRO]
-                    def filtered_architectures = params.ARCH == 'all' ? architectures : [params.ARCH]
-                    for (distro in filtered_distros) {
-                        for (arch in filtered_architectures) {
-                            stage("Build ${distro}-${arch}") {
-                                def buildCmd = "packer build"
-                                buildCmd += " -var 'distro=${distro}'"
-                                buildCmd += " -var 'arch=${arch}'"
-                                buildCmd += " -var 'enable_fips=${params.ENABLE_FIPS}'"
-                                
-                                if (params.INSTANCE_TYPE_OVERRIDE) {
-                                    buildCmd += " -var 'instance_type_override=${params.INSTANCE_TYPE_OVERRIDE}'"
-                                }
-                                
-                                buildCmd += " build.pkr.hcl"
-                                
-                                echo "Building ${distro} for ${arch}..."
-                                // sh buildCmd
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        stage('EKS AMI Builds') {
-            when {
-                expression { return !params.PARALLEL_BUILDS }
-                expression { return params.DISTRO == 'all' || params.DISTRO.contains("-eks")?.trim() }
-            }
-            steps {
-                script {
-                    def filtered_distros = params.DISTRO == 'all' ? distros.findAll { it.contains("-eks") } : [params.DISTRO]
+                    def buildMatrix = [:]
+                    def filtered_distros = []
                     def filtered_architectures = params.ARCH == 'all' ? architectures : [params.ARCH]
                     def filtered_k8s_versions = params.K8S_VERSION == 'all' ? k8s_versions : [params.K8S_VERSION]
 
+                    if (params.DISTRO == 'all') {
+                        filtered_distros = distros
+                    } else {
+                        filtered_distros = [params.DISTRO]
+                    }
+
                     for (distro in filtered_distros) {
+                        def isEks = distro.contains("-eks")
+                        def k8s_versions_to_use = isEks ? filtered_k8s_versions : [null]
                         for (arch in filtered_architectures) {
-                            for (k8s_version in filtered_k8s_versions) {
+                            for (k8s_version in k8s_versions_to_use) {
+                                // Skip non-EKS distros if k8s_version is set
+                                if (!isEks && k8s_version != null) {
+                                    continue
+                                }
+                                // Skip EKS distros if k8s_version is not set
+                                if (isEks && k8s_version == null) {
+                                    continue
+                                }
                                 // Do not allow amazon-linux-2-eks to build on Kubernetes versions greater than 1.32
-                                if (distro == 'amazon-linux-2-eks' && k8s_version > '1.32') {
+                                if (distro == 'amazon-linux-2-eks' && k8s_version && k8s_version > '1.32') {
                                     echo "Skipping ${distro}-${arch}-${k8s_version} - Kubernetes version ${k8s_version} is not supported"
                                     continue
                                 }
-                                stage("Build ${distro}-${arch}-${k8s_version}") {
-                                    def buildCmd = "packer build"
-                                    buildCmd += " -var 'distro=${distro}'"
-                                    buildCmd += " -var 'arch=${arch}'"
-                                    buildCmd += " -var 'enable_fips=${params.ENABLE_FIPS}'"
-                                    buildCmd += " -var 'k8s_version=${k8s_version}'"
-                                    if (params.INSTANCE_TYPE_OVERRIDE) {
-                                        buildCmd += " -var 'instance_type_override=${params.INSTANCE_TYPE_OVERRIDE}'"
+                                def stageName = isEks ? "Build ${distro}-${arch}-${k8s_version}" : "Build ${distro}-${arch}"
+                                buildMatrix[stageName] = {
+                                    node {
+                                        stage(stageName) {
+                                            def buildCmd = "packer build"
+                                            buildCmd += " -var 'distro=${distro}'"
+                                            buildCmd += " -var 'arch=${arch}'"
+                                            buildCmd += " -var 'enable_fips=${params.ENABLE_FIPS}'"
+                                            if (isEks) {
+                                                buildCmd += " -var 'k8s_version=${k8s_version}'"
+                                            }
+                                            if (params.INSTANCE_TYPE_OVERRIDE) {
+                                                buildCmd += " -var 'instance_type_override=${params.INSTANCE_TYPE_OVERRIDE}'"
+                                            }
+                                            buildCmd += " build.pkr.hcl"
+                                            echo "Building ${distro} for ${arch}${isEks ? " and ${k8s_version}" : ""}..."
+                                            // sh buildCmd
+                                        }
                                     }
-                                    
-                                    buildCmd += " build.pkr.hcl"
-                                    
-                                    echo "Building ${distro} for ${arch} and ${k8s_version}..."
-                                    // sh buildCmd
                                 }
                             }
                         }
                     }
+                    parallel buildMatrix
                 }
             }
         }
