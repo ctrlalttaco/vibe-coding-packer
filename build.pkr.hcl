@@ -49,22 +49,26 @@ variable "k8s_version" {
   description = "Kubernetes version for EKS builds"
 }
 
-# Speed optimization: Allow instance type override for faster builds
 variable "instance_type_override" {
   type        = string
   default     = ""
-  description = "Override instance type for performance optimization"
+  description = "Override instance type"
 }
 
-# Security optimization: Enable IMDSv2 enforcement
 variable "enforce_imdsv2" {
   type        = bool
   default     = true
   description = "Enforce IMDSv2 for enhanced security"
 }
 
-locals {
-  source_distros = [
+variable "source_distros" {
+  type = list(object({
+    name = string
+    source_ami_name = string
+    source_ami_owners = list(string)
+    ssh_username = string
+  }))
+  default = [
     {
       name                = "ubuntu-22"
       source_ami_name     = "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-*-server-*"
@@ -152,9 +156,11 @@ locals {
       eks                 = true
     }
   ]
+}
+locals {
 
   # Filter by distro if specified
-  filtered_distros = [for d in local.source_distros : d if var.distro == "" || d.name == var.distro]
+  filtered_distros = [for d in var.source_distros : d if var.distro == "" || d.name == var.distro]
   filtered_eks     = [for d in local.filtered_distros : d if lookup(d, "eks", false) && var.k8s_version != ""]
   distros          = [for d in local.filtered_eks : {
     name              = d.name
@@ -233,7 +239,7 @@ build {
   }
 
   provisioner "ansible" {
-    playbook_file = "playbooks/playbook.yml"
+    playbook_file = "ansible/playbook.yml"
     extra_arguments = [
       "-e", "enable_fips=${var.enable_fips}",
       # Speed optimization: Use more forks for parallel execution

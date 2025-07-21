@@ -13,7 +13,6 @@ pipeline {
         booleanParam(name: 'ENABLE_FIPS', defaultValue: false, description: 'Enable FIPS mode for security compliance')
         booleanParam(name: 'ENFORCE_IMDSV2', defaultValue: true, description: 'Enforce IMDSv2 for enhanced security')
         choice(name: 'INSTANCE_TYPE_OVERRIDE', choices: ['all'] + instance_type_overrides, description: 'Override instance type for builds (leave empty for auto-selection)')
-        booleanParam(name: 'PARALLEL_BUILDS', defaultValue: true, description: 'Enable parallel builds for faster execution')
     }
     triggers {
         // Run every Monday at 1:00 AM UTC for full builds
@@ -33,7 +32,6 @@ pipeline {
         AWS_DEFAULT_REGION    = 'us-east-1'
         PACKER_LOG            = '1'
         PACKER_LOG_PATH       = 'packer.log'
-        // Security: Disable Packer telemetry
         CHECKPOINT_DISABLE    = '1'
     }
     stages {
@@ -76,146 +74,8 @@ pipeline {
                 }
             }
         }
-        stage('Matrix AMI Build') {
+        stage('AMI Builds') {
             when {
-                expression { return params.PARALLEL_BUILDS }
-                expression { return params.DISTRO == 'all' || !params.DISTRO.contains("-eks")?.trim() }
-            }
-            matrix {
-                axes {
-                    axis {
-                        name: 'DISTRO'
-                        values: params.DISTRO == 'all' ? distros : [params.DISTRO]
-                    }
-                    axis {
-                        name: 'ARCH'
-                        values: params.ARCH == 'all' ? architectures : [params.ARCH]
-                    }
-                }
-                excludes {
-                    exclude {
-                        axis {
-                            name: 'DISTRO'
-                            values: params.DISTRO == 'all' ? distros.findAll { it.contains("-eks") } : [params.DISTRO.contains("-eks")]
-                        }
-                    }
-                }
-                stages {
-                    stage('Build') {
-                        agent any
-                        options { 
-                            lock(resource: 'packer-ami', quantity: 3)  // Allow more concurrent builds
-                            timeout(time: 90, unit: 'MINUTES')  // Per-build timeout
-                        }
-                        steps {
-                            script {
-                                buildCmd = "packer build"
-                                buildCmd += " -var 'distro=${DISTRO}'"
-                                buildCmd += " -var 'arch=${ARCH}'"
-                                buildCmd += " -var 'enable_fips=${params.ENABLE_FIPS}'"
-                                if (params.INSTANCE_TYPE_OVERRIDE) {
-                                    buildCmd += " -var 'instance_type_override=${params.INSTANCE_TYPE_OVERRIDE}'"
-                                }
-                                buildCmd += " build.pkr.hcl"
-                                echo "Executing: ${buildCmd}"
-                                sh buildCmd
-                            }
-                        }
-                        post {
-                            always {
-                                // Archive build artifacts
-                                archiveArtifacts artifacts: 'manifest.json', allowEmptyArchive: true
-                                archiveArtifacts artifacts: 'packer.log', allowEmptyArchive: true
-                            }
-                            failure {
-                                // Capture additional debug information on failure
-                                sh 'tail -100 packer.log || true'
-                                sh 'df -h || true'
-                                sh 'free -m || true'
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        stage('Matrix EKS AMI Build') {
-            when {
-                expression { return params.PARALLEL_BUILDS }
-                expression { return params.DISTRO == 'all' || params.DISTRO.contains("-eks")?.trim() }
-            }
-            matrix {
-                axes {
-                    axis {
-                        name: 'DISTRO'
-                        values: params.DISTRO == 'all' ? distros.findAll { it.contains("-eks") } : [params.DISTRO]
-                    }
-                    axis {
-                        name: 'ARCH'
-                        values: params.ARCH == '' ? architectures : [params.ARCH]
-                    }
-                    axis {
-                        name: 'K8S_VERSION'
-                        values: params.K8S_VERSION == '' ? k8s_versions : [params.K8S_VERSION]
-                    }
-                }
-                // Do not allow amazon-linux-2-eks to build on Kubernetes versions greater than 1.32
-                excludes {
-                    exclude {
-                        axis {
-                            name: 'DISTRO'
-                            values: ['amazon-linux-2-eks']
-                        }
-                        axis {
-                            name: 'K8S_VERSION'
-                            values: ['1.33']
-                        }
-                    }
-                }
-                stages {
-                    stage('Build') {
-                        agent any
-                        options { 
-                            lock(resource: 'packer-ami', quantity: 3)  // Allow more concurrent builds
-                            timeout(time: 90, unit: 'MINUTES')  // Per-build timeout
-                        }
-                        steps {
-                            script {
-                                buildCmd = "packer build"
-                                buildCmd += " -var 'distro=${DISTRO}'"
-                                buildCmd += " -var 'arch=${ARCH}'"
-                                buildCmd += " -var 'enable_fips=${params.ENABLE_FIPS}'"
-                                buildCmd += " -var 'k8s_version=${K8S_VERSION}'"
-                                if (params.INSTANCE_TYPE_OVERRIDE) {
-                                    buildCmd += " -var 'instance_type_override=${params.INSTANCE_TYPE_OVERRIDE}'"
-                                }
-                                
-                                buildCmd += " build.pkr.hcl"
-                                
-                                echo "Executing: ${buildCmd}"
-                                sh buildCmd
-                            }
-                        }
-                        post {
-                            always {
-                                // Archive build artifacts
-                                archiveArtifacts artifacts: 'manifest.json', allowEmptyArchive: true
-                                archiveArtifacts artifacts: 'packer.log', allowEmptyArchive: true
-                            }
-                            failure {
-                                // Capture additional debug information on failure
-                                sh 'tail -100 packer.log || true'
-                                sh 'df -h || true'
-                                sh 'free -m || true'
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Sequential AMI Build') {
-            when {
-                expression { return !params.PARALLEL_BUILDS }
                 expression { return params.DISTRO == 'all' || !params.DISTRO.contains("-eks")?.trim() }
             }
             steps {
@@ -237,15 +97,14 @@ pipeline {
                                 buildCmd += " build.pkr.hcl"
                                 
                                 echo "Building ${distro} for ${arch}..."
-                                sh buildCmd
+                                // sh buildCmd
                             }
                         }
                     }
                 }
             }
         }
-
-        stage('Sequential EKS AMI Build') {
+        stage('EKS AMI Builds') {
             when {
                 expression { return !params.PARALLEL_BUILDS }
                 expression { return params.DISTRO == 'all' || params.DISTRO.contains("-eks")?.trim() }
@@ -277,7 +136,7 @@ pipeline {
                                     buildCmd += " build.pkr.hcl"
                                     
                                     echo "Building ${distro} for ${arch} and ${k8s_version}..."
-                                    sh buildCmd
+                                    // sh buildCmd
                                 }
                             }
                         }
@@ -285,7 +144,6 @@ pipeline {
                 }
             }
         }
-        
         stage('Security Validation') {
             steps {
                 script {
@@ -304,7 +162,6 @@ pipeline {
             }
         }
     }
-    
     post {
         always {
             // Clean up workspace for security
