@@ -48,8 +48,6 @@ pipeline {
                     }
                     echo "=========================="
                 }
-                // Clean before build
-                cleanWs()
                 // Checkout code
                 checkout scm: scmGit(branches: [[name: '*/vibe_coding']], extensions: [], userRemoteConfigs: [[url: GIT_REPO_URL]])
             }
