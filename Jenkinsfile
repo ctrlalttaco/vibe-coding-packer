@@ -125,7 +125,7 @@ pipeline {
                                                 buildCmd += " -var 'instance_type_override=${params.INSTANCE_TYPE_OVERRIDE}'"
                                             }
                                             buildCmd += " build.pkr.hcl"
-                                            echo "Building ${distro} for ${arch}${isEks ? " and ${k8sVersion}" : ""}..."
+                                            echo "Building ${stageName}..."
                                             sleep 15
                                             // sh buildCmd
                                         }
