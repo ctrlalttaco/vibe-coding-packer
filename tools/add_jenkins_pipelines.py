@@ -15,7 +15,7 @@ args = parser.parse_args()
 JENKINS_URL = args.jenkins_url or os.environ.get('JENKINS_URL')
 USERNAME = args.username or os.environ.get('JENKINS_USER')
 API_TOKEN = args.api_token or os.environ.get('JENKINS_TOKEN')
-REPO_URL = args.repo_url or os.environ.get('REPO_URL') or 'https://github.com/ctrlalttaco/ami-builders.git'
+REPO_URL = args.repo_url or os.environ.get('REPO_URL') or 'https://github.com/ctrlalttaco/vibe-coding-packer.git'
 
 # Prompt if still missing
 if not JENKINS_URL:
@@ -30,11 +30,6 @@ PIPELINES = [
         'name': 'ami-builder-main',
         'jenkinsfile': 'Jenkinsfile',
         'description': 'Multi-distro Linux AMI builds'
-    },
-    {
-        'name': 'ami-builder-eks',
-        'jenkinsfile': 'Jenkinsfile-EKS',
-        'description': 'EKS AMI builds for Amazon Linux 2/2023'
     }
 ]
 
