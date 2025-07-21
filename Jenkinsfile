@@ -26,6 +26,11 @@ pipeline {
         timestamps()
         ansiColor('xterm')
         skipDefaultCheckout(true)
+        throttleJobProperty(
+            categories: ['throttle1'],
+            throttleEnabled: true,
+            throttleOption: 'category'
+        )
     }
     environment {
         AWS_ACCESS_KEY_ID     = credentials('aws-access-key-id')
@@ -132,9 +137,7 @@ pipeline {
                             }
                         }
                     }
-                    throttle(['throttle1']) {
-                        parallel buildMatrix
-                    }
+                    parallel buildMatrix
                 }
             }
         }
