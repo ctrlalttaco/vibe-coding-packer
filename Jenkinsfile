@@ -83,12 +83,12 @@ pipeline {
             }
             steps {
                 script {
-                    distros = params.DISTRO == 'all' ? distros.findAll { !it.contains("-eks") } : [params.DISTRO]
-                    architectures = params.ARCH == 'all' ? architectures : [params.ARCH]
-                    for (distro in distros) {
-                        for (arch in architectures) {
+                    def filtered_distros = params.DISTRO == 'all' ? distros.findAll { !it.contains("-eks") } : [params.DISTRO]
+                    def filtered_architectures = params.ARCH == 'all' ? architectures : [params.ARCH]
+                    for (distro in filtered_distros) {
+                        for (arch in filtered_architectures) {
                             stage("Build ${distro}-${arch}") {
-                                buildCmd = "packer build"
+                                def buildCmd = "packer build"
                                 buildCmd += " -var 'distro=${distro}'"
                                 buildCmd += " -var 'arch=${arch}'"
                                 buildCmd += " -var 'enable_fips=${params.ENABLE_FIPS}'"
@@ -114,20 +114,20 @@ pipeline {
             }
             steps {
                 script {
-                    distros = params.DISTRO == 'all' ? distros.findAll { it.contains("-eks") } : [params.DISTRO]
-                    architectures = params.ARCH == 'all' ? architectures : [params.ARCH]
-                    k8s_versions = params.K8S_VERSION == 'all' ? k8s_versions : [params.K8S_VERSION]
+                    def filtered_distros = params.DISTRO == 'all' ? distros.findAll { it.contains("-eks") } : [params.DISTRO]
+                    def filtered_architectures = params.ARCH == 'all' ? architectures : [params.ARCH]
+                    def filtered_k8s_versions = params.K8S_VERSION == 'all' ? k8s_versions : [params.K8S_VERSION]
 
-                    for (distro in distros) {
-                        for (arch in architectures) {
-                            for (k8s_version in k8s_versions) {
+                    for (distro in filtered_distros) {
+                        for (arch in filtered_architectures) {
+                            for (k8s_version in filtered_k8s_versions) {
                                 // Do not allow amazon-linux-2-eks to build on Kubernetes versions greater than 1.32
                                 if (distro == 'amazon-linux-2-eks' && k8s_version > '1.32') {
                                     echo "Skipping ${distro}-${arch}-${k8s_version} - Kubernetes version ${k8s_version} is not supported"
                                     continue
                                 }
                                 stage("Build ${distro}-${arch}-${k8s_version}") {
-                                    buildCmd = "packer build"
+                                    def buildCmd = "packer build"
                                     buildCmd += " -var 'distro=${distro}'"
                                     buildCmd += " -var 'arch=${arch}'"
                                     buildCmd += " -var 'enable_fips=${params.ENABLE_FIPS}'"
