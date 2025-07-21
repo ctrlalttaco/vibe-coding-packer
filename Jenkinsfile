@@ -25,6 +25,7 @@ pipeline {
         timeout(time: 4, unit: 'HOURS')  // Increased timeout for security builds
         timestamps()
         ansiColor('xterm')
+        skipDefaultCheckout(true)
     }
     environment {
         AWS_ACCESS_KEY_ID     = credentials('aws-access-key-id')
@@ -47,8 +48,8 @@ pipeline {
                     }
                     echo "=========================="
                 }
-                // Clean workspace for security
-                // cleanWs()
+                // Clean before build
+                cleanWs()
                 // Checkout code
                 checkout scm: scmGit(branches: [[name: '*/vibe_coding']], extensions: [], userRemoteConfigs: [[url: GIT_REPO_URL]])
             }
