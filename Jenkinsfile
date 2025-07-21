@@ -50,9 +50,7 @@ pipeline {
                 // Clean workspace for security
                 cleanWs()
                 // Checkout code
-                checkout scmGit(
-                    branches: [[name: 'vibe_coding']],
-                    userRemoteConfigs: [[url: GIT_REPO_URL]])
+                checkout scm: scmGit(branches: [[name: '*/vibe_coding']], extensions: [], userRemoteConfigs: [[url: GIT_REPO_URL]])
             }
         }
         stage('Validate Configuration') {
