@@ -26,11 +26,6 @@ pipeline {
         timestamps()
         ansiColor('xterm')
         skipDefaultCheckout(true)
-        throttleJobProperty(
-            categories: ['throttle1'],
-            throttleEnabled: true,
-            throttleOption: 'category'
-        )
     }
     environment {
         AWS_ACCESS_KEY_ID     = credentials('aws-access-key-id')
@@ -117,27 +112,31 @@ pipeline {
                                 }
                                 def stageName = isEks ? "Build ${distro}-${arch}-${k8sVersion}" : "Build ${distro}-${arch}"
                                 buildMatrix[stageName] = {
-                                    stage(stageName) {
-                                        def buildCmd = "packer build"
-                                        buildCmd += " -var 'distro=${distro}'"
-                                        buildCmd += " -var 'arch=${arch}'"
-                                        buildCmd += " -var 'enable_fips=${params.ENABLE_FIPS}'"
-                                        if (isEks) {
-                                            buildCmd += " -var 'k8s_version=${k8sVersion}'"
+                                    node {
+                                        stage(stageName) {
+                                            def buildCmd = "packer build"
+                                            buildCmd += " -var 'distro=${distro}'"
+                                            buildCmd += " -var 'arch=${arch}'"
+                                            buildCmd += " -var 'enable_fips=${params.ENABLE_FIPS}'"
+                                            if (isEks) {
+                                                buildCmd += " -var 'k8s_version=${k8sVersion}'"
+                                            }
+                                            if (params.INSTANCE_TYPE_OVERRIDE) {
+                                                buildCmd += " -var 'instance_type_override=${params.INSTANCE_TYPE_OVERRIDE}'"
+                                            }
+                                            buildCmd += " build.pkr.hcl"
+                                            echo "Building ${distro} for ${arch}${isEks ? " and ${k8sVersion}" : ""}..."
+                                            sleep 15
+                                            // sh buildCmd
                                         }
-                                        if (params.INSTANCE_TYPE_OVERRIDE) {
-                                            buildCmd += " -var 'instance_type_override=${params.INSTANCE_TYPE_OVERRIDE}'"
-                                        }
-                                        buildCmd += " build.pkr.hcl"
-                                        echo "Building ${distro} for ${arch}${isEks ? " and ${k8sVersion}" : ""}..."
-                                        sleep 15
-                                        // sh buildCmd
                                     }
                                 }
                             }
                         }
                     }
-                    parallel buildMatrix
+                    throttle(['throttle1']) {
+                        parallel buildMatrix
+                    }
                 }
             }
         }
