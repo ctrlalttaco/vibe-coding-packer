@@ -47,9 +47,12 @@ pipeline {
                         echo "Instance Type Override: ${params.INSTANCE_TYPE_OVERRIDE}"
                     }
                     echo "=========================="
+
+                    // Cleanup workspace
+                    cleanWs()
+                    // Checkout code
+                    checkout scm: scmGit(branches: [[name: '*/vibe_coding']], extensions: [], userRemoteConfigs: [[url: GIT_URL]])
                 }
-                // Checkout code
-                checkout scm: scmGit(branches: [[name: '*/vibe_coding']], extensions: [], userRemoteConfigs: [[url: GIT_REPO_URL]])
             }
         }
         stage('Validate Configuration') {
@@ -163,8 +166,12 @@ pipeline {
     }
     post {
         cleanup {
-            // Clean up workspace for security
-            cleanWs()
+            script {
+                // Clean up workspace for security
+                if (getContext(hudson.FilePath)) {
+                    cleanWs()
+                }
+            }
         }
         success {
             script {
