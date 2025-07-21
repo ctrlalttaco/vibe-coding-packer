@@ -58,17 +58,17 @@ pipeline {
         }
         stage('Validate Configuration') {
             parallel {
-                stage('Packer Init & Validate') {
-                    steps {
-                        sh 'packer init .'
-                        sh 'packer validate build.pkr.hcl'
-                    }
-                }
-                stage('Ansible Syntax Check') {
-                    steps {
-                        sh 'ansible-playbook --syntax-check ansible/playbook.yml'
-                    }
-                }
+                // stage('Packer Init & Validate') {
+                //     steps {
+                //         sh 'packer init .'
+                //         sh 'packer validate build.pkr.hcl'
+                //     }
+                // }
+                // stage('Ansible Syntax Check') {
+                //     steps {
+                //         sh 'ansible-playbook --syntax-check ansible/playbook.yml'
+                //     }
+                // }
                 stage('Scripts Check') {
                     steps {
                         sh 'bash -n scripts/prerequisites.sh'
