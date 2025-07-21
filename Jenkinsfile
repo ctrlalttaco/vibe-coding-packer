@@ -83,8 +83,8 @@ pipeline {
                 script {
                     def buildMatrix = [:]
                     def filteredDistros = []
-                    def filteredArchitectures = []
-                    def filteredK8sVersions = []
+                    def filteredArchitectures = params.ARCH == 'all' ? architectures : [params.ARCH]
+                    def filteredK8sVersions = params.K8S_VERSION == 'all' ? k8sVersions : [params.K8S_VERSION]
 
                     if (params.DISTRO == 'all') {
                         filteredDistros = distros
