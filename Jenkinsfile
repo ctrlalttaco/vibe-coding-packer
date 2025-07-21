@@ -51,7 +51,8 @@ pipeline {
                     // Cleanup workspace
                     cleanWs()
                     // Checkout code
-                    checkout scm: scmGit(branches: [[name: '*/vibe_coding']])
+                    checkout scm
+                    sh "git checkout vibe_coding"
                 }
             }
         }
