@@ -16,7 +16,7 @@ pipeline {
     }
     triggers {
         // Run every Monday at 1:00 AM UTC for full builds
-        cron('0 1 * * 1')
+        cron('H 1 * * 1')
     }
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
@@ -162,7 +162,7 @@ pipeline {
         }
     }
     post {
-        always {
+        cleanup {
             // Clean up workspace for security
             cleanWs()
         }
