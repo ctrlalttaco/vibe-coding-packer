@@ -112,22 +112,20 @@ pipeline {
                                 }
                                 def stageName = isEks ? "Build ${distro}-${arch}-${k8s_version}" : "Build ${distro}-${arch}"
                                 buildMatrix[stageName] = {
-                                    node {
-                                        stage(stageName) {
-                                            def buildCmd = "packer build"
-                                            buildCmd += " -var 'distro=${distro}'"
-                                            buildCmd += " -var 'arch=${arch}'"
-                                            buildCmd += " -var 'enable_fips=${params.ENABLE_FIPS}'"
-                                            if (isEks) {
-                                                buildCmd += " -var 'k8s_version=${k8s_version}'"
-                                            }
-                                            if (params.INSTANCE_TYPE_OVERRIDE) {
-                                                buildCmd += " -var 'instance_type_override=${params.INSTANCE_TYPE_OVERRIDE}'"
-                                            }
-                                            buildCmd += " build.pkr.hcl"
-                                            echo "Building ${distro} for ${arch}${isEks ? " and ${k8s_version}" : ""}..."
-                                            // sh buildCmd
+                                    stage(stageName) {
+                                        def buildCmd = "packer build"
+                                        buildCmd += " -var 'distro=${distro}'"
+                                        buildCmd += " -var 'arch=${arch}'"
+                                        buildCmd += " -var 'enable_fips=${params.ENABLE_FIPS}'"
+                                        if (isEks) {
+                                            buildCmd += " -var 'k8s_version=${k8s_version}'"
                                         }
+                                        if (params.INSTANCE_TYPE_OVERRIDE) {
+                                            buildCmd += " -var 'instance_type_override=${params.INSTANCE_TYPE_OVERRIDE}'"
+                                        }
+                                        buildCmd += " build.pkr.hcl"
+                                        echo "Building ${distro} for ${arch}${isEks ? " and ${k8s_version}" : ""}..."
+                                        // sh buildCmd
                                     }
                                 }
                             }
